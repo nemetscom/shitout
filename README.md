@@ -1,0 +1,2 @@
+# shitout
+shitout wallet
