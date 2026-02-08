@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>SHITOUT.ONLINE</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@700&display=swap');
+        body { background: #020408; color: #f1f5f9; font-family: sans-serif; -webkit-tap-highlight-color: transparent; }
+        .mono { font-family: 'JetBrains+Mono', monospace; }
+        .glass { background: rgba(15, 23, 42, 0.8); backdrop-filter: blur(10px); border: 1px solid rgba(51, 65, 85, 0.5); }
+        .active-tab { border-bottom: 3px solid #3b82f6; color: #3b82f6; }
+        input:focus { outline: none; border-color: #3b82f6; }
+    </style>
+</head>
+<body class="pb-32">
+
+    <header class="p-6 flex justify-between items-center sticky top-0 z-50 glass">
+        <div>
+            <h1 class="text-2xl font-black italic tracking-tighter text-blue-500 uppercase leading-none">SHITOUT</h1>
+            <p class="text-[8px] font-bold text-slate-500 tracking-[0.4em] uppercase">Base Ecosystem</p>
+        </div>
+        <button onclick="connect()" id="connBtn" class="bg-blue-600 px-5 py-2 rounded-xl font-bold text-xs uppercase shadow-lg shadow-blue-500/20">Connect</button>
+    </header>
+
+    <nav class="flex border-b border-slate-800 mb-6 sticky top-[72px] z-40 bg-[#020408]">
+        <button onclick="setTab('clean')" id="tab-clean" class="flex-1 py-4 font-black text-[10px] uppercase active-tab text-blue-500 tracking-widest">Cleaner</button>
+        <button onclick="setTab('gov')" id="tab-gov" class="flex-1 py-4 font-black text-[10px] uppercase text-slate-500 tracking-widest">Governance</button>
+    </nav>
+
+    <main class="p-4 max-w-xl mx-auto">
+        
+        <div id="sec-clean">
+            <div id="swap-list" class="grid gap-3">
+                <div class="text-center py-20">
+                    <p class="text-slate-600 font-bold uppercase text-[10px] tracking-widest mb-4">Scan your wallet for approved tokens</p>
+                    <button onclick="connect()" class="text-blue-500 font-black text-xs uppercase border-b border-blue-500/30 pb-1">Connect Wallet</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="sec-gov" class="hidden">
+            <div class="glass p-6 rounded-3xl mb-8 border-blue-500/20 text-left">
+                <label class="block text-[10px] font-bold text-slate-400 uppercase mb-3 ml-1 tracking-widest">Submit New Shitcoin</label>
+                <input type="text" id="addressInput" oninput="handleAddressInput(this.value)" placeholder="0x..." 
+                       class="w-full bg-slate-900/50 border-2 border-slate-800 p-4 rounded-2xl mono text-sm focus:border-blue-500 transition-colors">
+                <p id="inputMsg" class="text-[9px] font-bold uppercase mt-3 ml-1 tracking-wider h-4"></p>
+            </div>
+
+            <div id="previewArea" class="mb-10"></div>
+            
+            <div class="space-y-4">
+                <h3 class="text-[10px] font-black uppercase text-slate-500 tracking-[0.2em] ml-1">Current Approved List</h3>
+                <div id="approved-display" class="grid gap-2">
+                    </div>
+            </div>
+        </div>
+
+    </main>
+
+    <div id="footer" class="fixed bottom-0 left-0 right-0 p-6 glass rounded-t-[2.5rem] border-t border-slate-800 hidden">
+        <div class="flex justify-between items-end max-w-xl mx-auto">
+            <div>
+                <p class="text-[9px] text-slate-500 font-bold uppercase mb-1 tracking-widest">Value to Claim</p>
+                <p id="totalPrice" class="text-3xl font-black italic leading-none text-white">0.00 <span class="text-xs text-blue-500 not-italic ml-1">USDC</span></p>
+            </div>
+            <button id="harvestBtn" disabled class="bg-slate-800 text-slate-500 px-8 py-4 rounded-2xl font-black uppercase text-xs tracking-widest">Harvest All</button>
+        </div>
+    </div>
+
+    <script>
+        let user, currentTab = 'clean';
+        // Наш "Белый список" (пока в коде, далее в Supabase)
+        let approvedList = [
+            { addr: "0x4ed4E24155c4552f951efCc7f9996e387063469b", sym: "DEGEN" }
+        ];
+
+        function setTab(t) {
+            currentTab = t;
+            document.getElementById('sec-clean').classList.toggle('hidden', t !== 'clean');
+            document.getElementById('sec-gov').classList.toggle('hidden', t !== 'gov');
+            document.getElementById('tab-clean').className = `flex-1 py-4 font-black text-[10px] uppercase tracking-widest ${t === 'clean' ? 'active-tab text-blue-500' : 'text-slate-500'}`;
+            document.getElementById('tab-gov').className = `flex-1 py-4 font-black text-[10px] uppercase tracking-widest ${t === 'gov' ? 'active-tab text-blue-500' : 'text-slate-500'}`;
+            if(t === 'gov') renderApprovedList();
+        }
+
+        async function connect() {
+            if (!window.ethereum) return alert("Open in Wallet App");
+            const accs = await window.ethereum.request({ method: 'eth_requestAccounts' });
+            user = accs[0].toLowerCase();
+            document.getElementById('connBtn').innerText = user.slice(0,6)+'...'+user.slice(-4);
+            document.getElementById('footer').classList.remove('hidden');
+            if (currentTab === 'clean') scanWallet();
+        }
+
+        async function handleAddressInput(val) {
+            const msg = document.getElementById('inputMsg');
+            const preview = document.getElementById('previewArea');
+            if (val.length < 42) { msg.innerText = ""; preview.innerHTML = ""; return; }
+
+            // ПРОВЕРКА НА ДУБЛИКАТ
+            const isExist = approvedList.some(item => item.addr.toLowerCase() === val.toLowerCase());
+            if (isExist) {
+                msg.className = "text-red-500 text-[9px] font-bold uppercase mt-3";
+                msg.innerText = "✖ Error: This token is already in the list!";
+                preview.innerHTML = "";
+                return;
+            }
+
+            msg.className = "text-blue-500 text-[9px] font-bold uppercase mt-3 animate-pulse";
+            msg.innerText = "Searching on DexScreener...";
+
+            try {
+                const res = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${val}`);
+                const data = await res.json();
+                if (data.pairs && data.pairs[0]) {
+                    const p = data.pairs[0];
+                    msg.className = "text-green-500 text-[9px] font-bold uppercase mt-3";
+                    msg.innerText = "✔ Token Found!";
+                    preview.innerHTML = `
+                        <div class="bg-blue-600/10 border border-blue-500/50 p-6 rounded-3xl flex justify-between items-center transition-all">
+                            <div>
+                                <h4 class="font-black text-xl italic uppercase text-white">${p.baseToken.symbol}</h4>
+                                <p class="text-[10px] font-bold text-blue-500 mono">$${p.priceUsd}</p>
+                            </div>
+                            <button onclick="addToVoting('${val}', '${p.baseToken.symbol}')" class="bg-blue-600 text-white px-6 py-3 rounded-xl font-black text-[10px] uppercase shadow-lg shadow-blue-500/40">Submit Vote</button>
+                        </div>`;
+                } else {
+                    msg.className = "text-yellow-500 text-[9px] font-bold uppercase mt-3";
+                    msg.innerText = "✖ Not found or no liquidity";
+                }
+            } catch (e) { msg.innerText = "API Error"; }
+        }
+
+        function renderApprovedList() {
+            const container = document.getElementById('approved-display');
+            container.innerHTML = approvedList.map(t => `
+                <div class="bg-slate-900/50 p-3 rounded-xl border border-slate-800 flex justify-between items-center">
+                    <span class="text-[10px] font-bold text-slate-300 mono">${t.addr.slice(0,6)}...${t.addr.slice(-4)}</span>
+                    <span class="text-[10px] font-black text-blue-500 uppercase">${t.sym}</span>
+                </div>
+            `).join('');
+        }
+
+        function scanWallet() {
+            const list = document.getElementById('swap-list');
+            list.innerHTML = `<div class="text-center py-20 text-blue-500 font-bold text-[10px] uppercase tracking-widest">
+                Scanning for ${approvedList.length} approved assets...
+            </div>`;
+            // Здесь будет логика Alchemy, которая ищет только адреса из approvedList
+        }
+
+        function addToVoting(addr, sym) {
+            alert("Token " + sym + " submitted! (Supabase connection next step)");
+        }
+    </script>
+</body>
+</html>
