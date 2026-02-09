@@ -125,25 +125,26 @@
                 </div>`;
         }
 
-        async function vote(tokenId) {
-            if (!user) return alert("Connect Wallet First!");
-            if (userPower <= 0) return alert("Your Power is 0. Activate it first.");
-            
-            // Наш лимит: 100,000 на один проект
-            const amountToVote = Math.min(userPower, 100000);
-            
-            // Отправляем в Supabase
-            const { error } = await _supabase.rpc('add_vote', { 
-                token_id: tokenId, 
-                weight: amountToVote 
-            });
-            
-            if (error) alert("Voting error: " + error.message);
-            else {
-                alert(`Voted with ${amountToVote.toLocaleString()} Power!`);
-                loadData();
-            }
-        }
+        // Найди функцию vote(tokenId) в скрипте сайта и замени её на эту:
+async function vote(tokenId) {
+    if (!user) return alert("Connect Wallet First!");
+    if (userPower <= 0) return alert("Your Power is 0.");
+    
+    const amountToVote = Math.min(userPower, 100000);
+    
+    // Передаем ТРИ параметра: ID токена, Вес и Адрес юзера
+    const { error } = await _supabase.rpc('add_vote', { 
+        token_id: tokenId, 
+        weight: amountToVote,
+        user_addr: user 
+    });
+    
+    if (error) alert(error.message);
+    else {
+        alert(`Voted with ${amountToVote.toLocaleString()} Power!`);
+        loadData();
+    }
+}
 
         async function handleSearch(val) {
             if (val.length === 42) {
