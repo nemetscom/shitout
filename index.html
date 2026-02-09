@@ -3,189 +3,236 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SHITOUT | Base Sepolia Test</title>
+    <title>SHITOUT | Dust Cleaner & Governance</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@700&display=swap');
-        body { background: #020408; color: #f1f5f9; font-family: 'JetBrains Mono', monospace; }
-        .glass { background: rgba(15, 23, 42, 0.8); backdrop-filter: blur(10px); border: 1px solid rgba(51, 65, 85, 0.5); }
-        .active-tab { border-bottom: 3px solid #3b82f6; color: #3b82f6; }
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;800&display=swap');
+        body { background: #05070a; color: #e2e8f0; font-family: 'JetBrains Mono', monospace; }
+        .glass { background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(12px); border: 1px solid rgba(51, 65, 85, 0.3); }
+        .btn-active { border-bottom: 2px solid #3b82f6; color: #3b82f6; }
+        .card-voting { border-left: 4px solid #3b82f6; }
+        .progress-bar { transition: width 0.5s ease-in-out; }
     </style>
 </head>
-<body class="pb-20">
+<body class="pb-24">
 
-    <header class="p-6 flex justify-between items-center glass sticky top-0 z-50">
-        <h1 class="text-2xl font-black text-blue-500 uppercase italic">SHITOUT <span class="text-[10px] bg-blue-500 text-white px-2 py-1 rounded">TESTNET</span></h1>
-        <button onclick="connect()" id="connBtn" class="bg-blue-600 px-4 py-2 rounded-xl font-bold text-xs uppercase">Connect Wallet</button>
+    <header class="p-5 flex justify-between items-center glass sticky top-0 z-50">
+        <div class="flex flex-col">
+            <span class="text-2xl font-black text-blue-500 italic tracking-tighter">SHITOUT</span>
+            <span class="text-[8px] uppercase tracking-[0.2em] text-slate-500 font-bold">Base Dust Cleaner</span>
+        </div>
+        <button onclick="connect()" id="connBtn" class="bg-blue-600 hover:bg-blue-500 px-5 py-2 rounded-2xl font-bold text-[10px] uppercase shadow-lg shadow-blue-900/20">Connect Wallet</button>
     </header>
 
-    <div id="status-bar" class="bg-blue-900/20 p-2 text-center text-[10px] font-bold uppercase tracking-widest text-blue-400 border-b border-blue-500/20">
-        My Power: <span id="user-power" class="text-white">0</span> SHITOUT
+    <div class="max-w-xl mx-auto px-4 mt-6">
+        <div class="glass p-4 rounded-3xl">
+            <div class="flex justify-between text-[10px] font-bold uppercase mb-2">
+                <span>Energy Reserve (7d)</span>
+                <span id="energy-text">0 / 0 SHITOUT</span>
+            </div>
+            <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                <div id="energy-bar" class="bg-blue-500 h-full progress-bar" style="width: 0%"></div>
+            </div>
+        </div>
     </div>
 
-    <nav class="flex border-b border-slate-800 bg-[#020408]">
-        <button onclick="setTab('clean')" id="tab-clean" class="flex-1 py-4 font-bold text-[10px] uppercase active-tab">Cleaner</button>
-        <button onclick="setTab('gov')" id="tab-gov" class="flex-1 py-4 font-bold text-[10px] uppercase text-slate-500">Governance</button>
+    <nav class="flex max-w-xl mx-auto mt-6 border-b border-slate-800">
+        <button onclick="setTab('clean')" id="tab-clean" class="flex-1 py-4 text-[10px] font-bold uppercase btn-active">Cleaner</button>
+        <button onclick="setTab('gov')" id="tab-gov" class="flex-1 py-4 text-[10px] font-bold uppercase text-slate-500">Governance</button>
+        <button onclick="setTab('token')" id="tab-token" class="flex-1 py-4 text-[10px] font-bold uppercase text-slate-500">$SHITOUT</button>
     </nav>
 
     <main class="p-4 max-w-xl mx-auto">
-        <div id="sec-clean">
-            <h2 class="text-xs font-bold text-slate-500 mb-4 uppercase tracking-widest">Approved for Clean</h2>
-            <div id="approved-list" class="grid gap-3"></div>
+        
+        <div id="sec-clean" class="space-y-4">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xs font-bold uppercase text-slate-500">Your Wallet Dust</h2>
+                <button class="text-[10px] bg-slate-800 px-3 py-1 rounded-full hover:bg-slate-700">Refresh</button>
+            </div>
+            <div id="wallet-tokens" class="grid gap-3">
+                <p class="text-center text-slate-600 py-10 text-xs">Connect wallet to scan for dust...</p>
+            </div>
+            <button id="batchSwapBtn" class="w-full bg-green-600 hidden p-4 rounded-2xl font-black uppercase text-sm mt-4 shadow-xl shadow-green-900/20">Clean Selected (Batch Swap)</button>
         </div>
 
-        <div id="sec-gov" class="hidden">
-            <div class="glass p-6 rounded-3xl mb-6">
-                <input type="text" id="addressInput" oninput="handleSearch(this.value)" placeholder="Paste Token Address (Base Sepolia)" 
-                       class="w-full bg-slate-900 border-2 border-slate-800 p-4 rounded-2xl text-sm focus:border-blue-500 outline-none transition-all">
+        <div id="sec-gov" class="hidden space-y-6">
+            <div class="glass p-5 rounded-3xl">
+                <p class="text-[10px] font-bold text-slate-400 mb-3 uppercase text-center">Submit New Token (Cost: 0.001 SHIT)</p>
+                <div class="flex gap-2">
+                    <input type="text" id="addressInput" oninput="handleSearch(this.value)" placeholder="Base Contract Address" class="flex-1 bg-slate-900 border border-slate-700 p-3 rounded-xl text-xs outline-none focus:border-blue-500">
+                </div>
+                <div id="previewArea" class="mt-3"></div>
             </div>
-            <div id="previewArea" class="mb-6"></div>
-            <h2 class="text-xs font-bold text-slate-500 mb-4 uppercase tracking-widest">Active Voting</h2>
-            <div id="voting-list" class="grid gap-3"></div>
+
+            <div id="voting-list" class="grid gap-4">
+                </div>
         </div>
+
+        <div id="sec-token" class="hidden text-center py-10">
+            <div class="glass p-8 rounded-[40px] inline-block w-full">
+                <h3 class="text-3xl font-black mb-2 text-white">1,000,000,000</h3>
+                <p class="text-[10px] text-slate-500 uppercase font-bold tracking-widest mb-8">Total SHITOUT Supply</p>
+                <div class="grid grid-cols-2 gap-4">
+                    <button class="bg-blue-600 p-4 rounded-2xl font-black uppercase text-xs">Buy SHIT</button>
+                    <button class="bg-slate-800 p-4 rounded-2xl font-black uppercase text-xs">Sell</button>
+                </div>
+                <p class="mt-6 text-[10px] text-slate-500">Liquidity Locked. Contract Verified.</p>
+            </div>
+        </div>
+
     </main>
 
     <script>
-        // Конфигурация
+        // CONFIG
         const SB_URL = "https://mfqteusxmwaagebykcdw.supabase.co";
         const SB_KEY = "sb_publishable_qc_XyoRsZsH0VIaLEwrECw_kgU0Sxj-";
         const _supabase = supabase.createClient(SB_URL, SB_KEY);
         
-        const TOKEN_ADDR = "0xf37E99001AE478077B184bf448FE8174d928e5a4";
+        const TOKEN_ADDR = "0xf37E99001AE478077B184bf448FE8174d928e5a4"; // Твой контракт
         const ABI = [
             "function getVotes(address) view returns (uint256)",
             "function getPastVotes(address, uint256) view returns (uint256)",
-            "function delegate(address)"
+            "function delegate(address)",
+            "function transfer(address, uint256) returns (bool)"
         ];
 
         let user = null;
-        let userPower = 0;
+        let userPower = 0; // Общая сила (блокчейн)
+        let energyAvailable = 0; // Доступно после вычета логов
         let provider, signer, contract;
 
         async function connect() {
-            if (!window.ethereum) return alert("MetaMask not found!");
-            try {
-                provider = new ethers.BrowserProvider(window.ethereum);
-                signer = await provider.getSigner();
-                const address = await signer.getAddress();
-                user = address.toLowerCase();
-                contract = new ethers.Contract(TOKEN_ADDR, ABI, signer);
-                
-                document.getElementById('connBtn').innerText = user.slice(0,6)+'...'+user.slice(-4);
-                await updatePower();
-            } catch (e) { console.error(e); }
+            if (!window.ethereum) return alert("Install MetaMask");
+            provider = new ethers.BrowserProvider(window.ethereum);
+            signer = await provider.getSigner();
+            user = (await signer.getAddress()).toLowerCase();
+            contract = new ethers.Contract(TOKEN_ADDR, ABI, signer);
+            document.getElementById('connBtn').innerText = user.slice(0,6)+'...';
+            updatePower();
         }
 
         async function updatePower() {
-            if (!contract || !user) return;
             try {
-                // Сначала проверяем текущий баланс голосов (getVotes)
-                const currentVotes = await contract.getVotes(user);
-                const formattedVotes = Number(ethers.formatEther(currentVotes));
-                
-                if (formattedVotes > 0) {
-                    userPower = formattedVotes;
-                    document.getElementById('user-power').innerText = Math.floor(userPower).toLocaleString();
-                } else {
-                    document.getElementById('user-power').innerHTML = '<button onclick="activate()" class="bg-red-500/20 px-2 py-1 rounded text-red-400 hover:bg-red-500/40 transition">⚠ Click to Activate Power</button>';
-                }
-            } catch (e) {
-                console.error("UpdatePower Error:", e);
-            }
-        }
+                // 1. Берем общую силу из блокчейна (сейчас текущую для теста)
+                const currentBlock = await provider.getBlockNumber();
+                const powerRaw = await contract.getPastVotes(user, currentBlock - 1);
+                userPower = Number(ethers.formatEther(powerRaw));
 
-        async function activate() {
-            try {
-                const tx = await contract.delegate(user);
-                alert("Transaction sent! Please wait for confirmation.");
-                await tx.wait();
-                alert("Success! Power activated.");
-                updatePower();
-            } catch (e) { alert("Error: " + e.message); }
+                // 2. Берем сумму потраченного из Supabase за 7 дней
+                const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+                const { data: logs } = await _supabase.from('votes_log').select('amount').eq('user_address', user).gt('created_at', sevenDaysAgo);
+                
+                const spent = logs ? logs.reduce((acc, log) => acc + Number(log.amount), 0) : 0;
+                energyAvailable = Math.max(0, userPower - spent);
+
+                // 3. Обновляем UI
+                document.getElementById('energy-text').innerText = `${Math.floor(energyAvailable).toLocaleString()} / ${Math.floor(userPower).toLocaleString()} SHITOUT`;
+                const percent = (energyAvailable / userPower) * 100 || 0;
+                document.getElementById('energy-bar').style.width = percent + '%';
+            } catch (e) { console.log(e); }
         }
 
         async function loadData() {
-            const { data, error } = await _supabase.from('governance_tokens').select('*').order('total_votes', { ascending: false });
-            if (error) return;
-            
-            document.getElementById('voting-list').innerHTML = data.filter(t => t.status === 'voting').map(t => renderCard(t)).join('');
-            document.getElementById('approved-list').innerHTML = data.filter(t => t.status === 'approved').map(t => renderCard(t, true)).join('');
+            const { data } = await _supabase.from('governance_tokens').select('*').order('total_votes', { ascending: false });
+            if (!data) return;
+            document.getElementById('voting-list').innerHTML = data.filter(t => t.status === 'voting').map(t => renderVoteCard(t)).join('');
         }
 
-        function renderCard(t, isApproved = false) {
+        function renderVoteCard(t) {
+            const progress = (t.total_votes / 10000000) * 100;
+            // Логика "Часа тишины"
+            const lastVote = new Date(t.last_vote_at || t.created_at).getTime();
+            const timeDiff = Math.max(0, (lastVote + 3600000) - Date.now());
+            const minutesLeft = Math.floor(timeDiff / 60000);
+
             return `
-                <div class="glass p-5 rounded-2xl flex justify-between items-center border border-slate-800">
-                    <div>
-                        <h4 class="font-black text-white uppercase">${t.symbol}</h4>
-                        <p class="text-[10px] text-blue-500 font-bold">${Math.floor(t.total_votes).toLocaleString()} POWER</p>
+                <div class="glass p-5 rounded-3xl card-voting relative overflow-hidden">
+                    <div class="flex justify-between items-start mb-4">
+                        <div>
+                            <h4 class="font-black text-white text-lg">${t.symbol}</h4>
+                            <p class="text-[9px] text-slate-500 uppercase tracking-tighter">${t.token_address}</p>
+                        </div>
+                        <div class="text-right">
+                            <span class="text-[10px] font-bold text-blue-400 block">${minutesLeft}m left</span>
+                            <span class="text-[9px] text-slate-600 uppercase font-bold">Limit: 10M</span>
+                        </div>
                     </div>
-                    ${!isApproved ? `<button onclick="vote('${t.id}')" class="bg-blue-600 hover:bg-blue-500 px-6 py-2 rounded-xl text-[10px] font-bold uppercase transition">Vote</button>` : '<span class="text-green-500 text-[10px] font-bold uppercase">To Be Cleaned</span>'}
+                    
+                    <div class="w-full bg-slate-900 h-1.5 rounded-full mb-6 overflow-hidden">
+                        <div class="bg-blue-500 h-full progress-bar" style="width: ${progress}%"></div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3">
+                        <button onclick="vote('${t.id}', true)" class="bg-blue-600/20 text-blue-400 border border-blue-500/30 py-3 rounded-2xl font-black uppercase text-[10px] hover:bg-blue-600 hover:text-white transition">Vote For</button>
+                        <button onclick="vote('${t.id}', false)" class="bg-red-900/20 text-red-400 border border-red-500/30 py-3 rounded-2xl font-black uppercase text-[10px] hover:bg-red-500 hover:text-white transition">Against</button>
+                    </div>
                 </div>`;
         }
 
-        // Найди функцию vote(tokenId) в скрипте сайта и замени её на эту:
-async function vote(tokenId) {
-    if (!user) return alert("Connect Wallet First!");
-    if (userPower <= 0) return alert("Your Power is 0.");
-    
-    const amountToVote = Math.min(userPower, 100000);
-    
-    // Передаем ТРИ параметра: ID токена, Вес и Адрес юзера
-    const { error } = await _supabase.rpc('add_vote', { 
-        token_id: tokenId, 
-        weight: amountToVote,
-        user_addr: user 
-    });
-    
-    if (error) alert(error.message);
-    else {
-        alert(`Voted with ${amountToVote.toLocaleString()} Power!`);
-        loadData();
-    }
-}
+        async function vote(tokenId, isFor) {
+            if (!user) return alert("Connect Wallet");
+            if (energyAvailable <= 0) return alert("No energy left!");
 
-        async function handleSearch(val) {
-            if (val.length === 42) {
-                try {
-                    const res = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${val}`);
-                    const d = await res.json();
-                    if (d.pairs && d.pairs[0]) {
-                        const p = d.pairs[0];
-                        document.getElementById('previewArea').innerHTML = `
-                            <div class="bg-blue-600/10 p-5 rounded-3xl flex justify-between items-center border border-blue-500/50 animate-in fade-in duration-500">
-                                <div>
-                                    <span class="font-black text-lg block">${p.baseToken.symbol}</span>
-                                    <span class="text-[10px] text-slate-400">Verified on DexScreener</span>
-                                </div>
-                                <button onclick="deployVote('${val}', '${p.baseToken.symbol}')" class="bg-blue-600 px-6 py-3 rounded-2xl text-xs font-bold uppercase hover:bg-blue-500">Add Project</button>
-                            </div>`;
-                    }
-                } catch(e) { console.log("Search error"); }
+            const weight = Math.min(energyAvailable, 100000); // Лимит 100к
+            const finalWeight = isFor ? weight : -weight;
+
+            const { error } = await _supabase.rpc('add_vote', { 
+                token_id: tokenId, 
+                weight: finalWeight,
+                user_addr: user 
+            });
+
+            if (error) alert(error.message);
+            else {
+                updatePower();
+                loadData();
             }
         }
 
-        async function deployVote(addr, sym) {
-            if (!user) return alert("Connect Wallet!");
-            const startWeight = Math.min(userPower, 100000);
-            const { error } = await _supabase.from('governance_tokens').insert([{ 
-                token_address: addr, symbol: sym, creator_address: user, 
-                initial_weight: startWeight, total_votes: startWeight 
-            }]);
-            if (error) alert("Token already in list!");
-            else location.reload();
+        async function handleSearch(val) {
+            if (val.length === 42) {
+                const res = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${val}`);
+                const d = await res.json();
+                if (d.pairs && d.pairs[0]) {
+                    const p = d.pairs[0];
+                    document.getElementById('previewArea').innerHTML = `
+                        <div class="flex justify-between items-center p-4 bg-blue-600/10 border border-blue-500/30 rounded-2xl mt-2 animate-pulse">
+                            <span class="font-bold text-xs">${p.baseToken.symbol}</span>
+                            <button onclick="submitNew('${val}', '${p.baseToken.symbol}')" class="bg-blue-600 px-4 py-2 rounded-xl text-[10px] font-bold uppercase">Pay 0.001 SHIT & Add</button>
+                        </div>`;
+                }
+            }
+        }
+
+        async function submitNew(addr, sym) {
+            try {
+                // Оплата 0.001 SHIT (18 decimals)
+                const amount = ethers.parseUnits("0.001", 18);
+                const tx = await contract.transfer(TOKEN_ADDR, amount); // Отправляем на адрес контракта как плату
+                await tx.wait();
+
+                await _supabase.from('governance_tokens').insert([{ 
+                    token_address: addr, symbol: sym, creator_address: user, 
+                    total_votes: 100, status: 'voting' 
+                }]);
+                location.reload();
+            } catch (e) { alert("Payment failed"); }
         }
 
         function setTab(t) {
             document.getElementById('sec-clean').classList.toggle('hidden', t !== 'clean');
             document.getElementById('sec-gov').classList.toggle('hidden', t !== 'gov');
-            document.getElementById('tab-clean').classList.toggle('active-tab', t === 'clean');
-            document.getElementById('tab-gov').classList.toggle('active-tab', t === 'gov');
+            document.getElementById('tab-token').classList.toggle('hidden', t !== 'token');
+            
+            document.getElementById('tab-clean').classList.toggle('btn-active', t === 'clean');
+            document.getElementById('tab-gov').classList.toggle('btn-active', t === 'gov');
+            document.getElementById('tab-token').classList.toggle('btn-active', t === 'token');
         }
 
-        // Автозагрузка
         loadData();
+        setInterval(loadData, 30000); // Автообновление раз в 30 сек
     </script>
 </body>
 </html>
