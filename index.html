@@ -3,14 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SHITOUT.ONLINE</title>
+    <title>SHITOUT | Testnet Governance</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@700&display=swap');
-        body { background: #020408; color: #f1f5f9; font-family: sans-serif; }
-        .mono { font-family: 'JetBrains+Mono', monospace; }
+        body { background: #020408; color: #f1f5f9; font-family: 'JetBrains Mono', monospace; }
         .glass { background: rgba(15, 23, 42, 0.8); backdrop-filter: blur(10px); border: 1px solid rgba(51, 65, 85, 0.5); }
         .active-tab { border-bottom: 3px solid #3b82f6; color: #3b82f6; }
     </style>
@@ -18,11 +17,13 @@
 <body class="pb-20">
 
     <header class="p-6 flex justify-between items-center glass sticky top-0 z-50">
-        <div>
-            <h1 class="text-2xl font-black text-blue-500 uppercase italic">SHITOUT</h1>
-        </div>
-        <button onclick="connect()" id="connBtn" class="bg-blue-600 px-4 py-2 rounded-xl font-bold text-xs uppercase">Connect</button>
+        <h1 class="text-2xl font-black text-blue-500 uppercase italic">SHITOUT <span class="text-[10px] bg-blue-500 text-white px-2 py-1 rounded">TESTNET</span></h1>
+        <button onclick="connect()" id="connBtn" class="bg-blue-600 px-4 py-2 rounded-xl font-bold text-xs uppercase hover:bg-blue-500 transition">Connect Wallet</button>
     </header>
+
+    <div id="status-bar" class="bg-blue-900/20 p-2 text-center text-[10px] font-bold uppercase tracking-widest text-blue-400 border-b border-blue-500/20">
+        Power: <span id="user-power" class="text-white">0</span> SHITOUT (Snapshot)
+    </div>
 
     <nav class="flex border-b border-slate-800 bg-[#020408]">
         <button onclick="setTab('clean')" id="tab-clean" class="flex-1 py-4 font-bold text-[10px] uppercase active-tab">Cleaner</button>
@@ -31,12 +32,13 @@
 
     <main class="p-4 max-w-xl mx-auto">
         <div id="sec-clean">
+            <h2 class="text-xs font-bold text-slate-500 mb-4 uppercase">Approved Tokens</h2>
             <div id="approved-list" class="grid gap-3"></div>
         </div>
 
         <div id="sec-gov" class="hidden">
             <div class="glass p-6 rounded-3xl mb-6">
-                <input type="text" id="addressInput" oninput="handleSearch(this.value)" placeholder="Token Address (Base)" 
+                <input type="text" id="addressInput" oninput="handleSearch(this.value)" placeholder="Token Address (Base Sepolia)" 
                        class="w-full bg-slate-900 border-2 border-slate-800 p-4 rounded-2xl text-sm focus:border-blue-500 outline-none">
             </div>
             <div id="previewArea" class="mb-6"></div>
@@ -45,61 +47,117 @@
     </main>
 
     <script>
-        // ИНИЦИАЛИЗАЦИЯ SUPABASE
         const SB_URL = "https://mfqteusxmwaagebykcdw.supabase.co";
         const SB_KEY = "sb_publishable_qc_XyoRsZsH0VIaLEwrECw_kgU0Sxj-";
         const _supabase = supabase.createClient(SB_URL, SB_KEY);
         
+        // Твой контракт в тестнете
+        const TOKEN_ADDR = "0xf37E99001AE478077B184bf448FE8174d928e5a4";
+        const ABI = [
+            "function getVotes(address) view returns (uint256)",
+            "function getPastVotes(address, uint256) view returns (uint256)",
+            "function delegate(address)"
+        ];
+
         let user = null;
-        let userBalance = 100; // Пока заглушка веса голоса
+        let userPower = 0;
+        let provider, signer, contract;
 
         async function connect() {
             if (window.ethereum) {
-                const accs = await window.ethereum.request({ method: 'eth_requestAccounts' });
-                user = accs[0];
+                provider = new ethers.BrowserProvider(window.ethereum);
+                signer = await provider.getSigner();
+                user = (await signer.getAddress()).toLowerCase();
+                contract = new ethers.Contract(TOKEN_ADDR, ABI, signer);
+                
                 document.getElementById('connBtn').innerText = user.slice(0,6)+'...'+user.slice(-4);
+                updatePower();
             }
         }
 
-        async function loadData() {
-            const { data, error } = await _supabase.from('governance_tokens').select('*').order('total_votes', { ascending: false });
-            if (error) return console.error(error);
+        async function updatePower() {
+            try {
+                const currentBlock = await provider.getBlockNumber();
+                // ДЛЯ ТЕСТА: берем баланс на 1 блок назад, чтобы сразу работало
+                const snapshotBlock = currentBlock - 1; 
+                
+                const power = await contract.getPastVotes(user, snapshotBlock);
+                userPower = Number(ethers.formatEther(power));
+                
+                document.getElementById('user-power').innerText = Math.floor(userPower).toLocaleString();
+            } catch (e) {
+                console.error("History Error:", e);
+                // Если истории еще нет (не делегировано)
+                const current = await contract.getVotes(user);
+                if (Number(current) > 0) {
+                    document.getElementById('user-power').innerText = "History Loading...";
+                } else {
+                    document.getElementById('user-power').innerHTML = '<button onclick="activate()" class="text-white underline">Click to Activate Power</button>';
+                }
+            }
+        }
 
-            const vList = document.getElementById('voting-list');
-            const aList = document.getElementById('approved-list');
+        async function activate() {
+            try {
+                const tx = await contract.delegate(user);
+                alert("Transaction sent! Wait for block confirmation.");
+                await tx.wait();
+                updatePower();
+            } catch (e) { alert(e.message); }
+        }
+
+        async function loadData() {
+            const { data } = await _supabase.from('governance_tokens').select('*').order('total_votes', { ascending: false });
+            if (!data) return;
             
-            vList.innerHTML = data.filter(t => t.status === 'voting').map(t => renderCard(t)).join('');
-            aList.innerHTML = data.filter(t => t.status === 'approved').map(t => renderCard(t, true)).join('');
+            document.getElementById('voting-list').innerHTML = data.filter(t => t.status === 'voting').map(t => renderCard(t)).join('');
+            document.getElementById('approved-list').innerHTML = data.filter(t => t.status === 'approved').map(t => renderCard(t, true)).join('');
         }
 
         function renderCard(t, isApproved = false) {
             return `
-                <div class="glass p-5 rounded-2xl flex justify-between items-center border border-slate-800">
+                <div class="glass p-5 rounded-2xl flex justify-between items-center border border-slate-800 transition hover:border-blue-500/50">
                     <div>
                         <h4 class="font-black text-white uppercase">${t.symbol}</h4>
-                        <p class="text-[10px] text-blue-500 font-bold">${t.total_votes} Votes</p>
+                        <p class="text-[10px] text-blue-500 font-bold">${Math.floor(t.total_votes).toLocaleString()} Votes</p>
                     </div>
-                    ${!isApproved ? `<button onclick="vote('${t.id}')" class="bg-blue-600 px-4 py-2 rounded-lg text-[10px] font-bold uppercase">Vote</button>` : ''}
+                    ${!isApproved ? `<button onclick="vote('${t.id}')" class="bg-blue-600 px-4 py-2 rounded-lg text-[10px] font-bold uppercase hover:bg-blue-400">Vote</button>` : '<span class="text-green-500 text-[10px] font-bold uppercase">Safe</span>'}
                 </div>`;
         }
 
         async function vote(tokenId) {
             if (!user) return alert("Connect Wallet!");
-            const { error } = await _supabase.rpc('add_vote', { token_id: tokenId, weight: userBalance });
+            if (userPower <= 0) return alert("Power is 0. Activate or wait for snapshot.");
+            
+            // Твой лимит: 100,000 за один раз
+            const amountToVote = Math.min(userPower, 100000);
+            
+            const { error } = await _supabase.rpc('add_vote', { 
+                token_id: tokenId, 
+                weight: amountToVote 
+            });
+            
             if (error) alert(error.message);
-            else loadData();
+            else {
+                alert(`Success! Used ${amountToVote.toLocaleString()} Power`);
+                loadData();
+            }
         }
 
         async function handleSearch(val) {
             if (val.length === 42) {
+                // Используем DexScreener API для получения данных токена
                 const res = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${val}`);
                 const d = await res.json();
                 if (d.pairs && d.pairs[0]) {
                     const p = d.pairs[0];
                     document.getElementById('previewArea').innerHTML = `
-                        <div class="bg-blue-600/20 p-4 rounded-2xl flex justify-between items-center border border-blue-500">
-                            <span class="font-bold">${p.baseToken.symbol}</span>
-                            <button onclick="deployVote('${val}', '${p.baseToken.symbol}')" class="bg-blue-600 px-4 py-2 rounded-lg text-xs font-bold uppercase">Deploy</button>
+                        <div class="bg-blue-600/10 p-4 rounded-2xl flex justify-between items-center border border-blue-500 animate-pulse">
+                            <div>
+                                <span class="font-bold block">${p.baseToken.symbol}</span>
+                                <span class="text-[10px] text-slate-400">${val.slice(0,10)}...</span>
+                            </div>
+                            <button onclick="deployVote('${val}', '${p.baseToken.symbol}')" class="bg-blue-600 px-4 py-2 rounded-lg text-xs font-bold uppercase">Add to Gov</button>
                         </div>`;
                 }
             }
@@ -107,18 +165,13 @@
 
         async function deployVote(addr, sym) {
             if (!user) return alert("Connect Wallet!");
+            const startWeight = Math.min(userPower, 100000);
             const { error } = await _supabase.from('governance_tokens').insert([{ 
-                token_address: addr, 
-                symbol: sym, 
-                creator_address: user, 
-                initial_weight: userBalance, 
-                total_votes: userBalance 
+                token_address: addr, symbol: sym, creator_address: user, 
+                initial_weight: startWeight, total_votes: startWeight 
             }]);
-            if (!error) {
-                document.getElementById('previewArea').innerHTML = '';
-                document.getElementById('addressInput').value = '';
-                loadData();
-            }
+            if (error) alert("Token already exists!");
+            else location.reload();
         }
 
         function setTab(t) {
@@ -128,7 +181,6 @@
             document.getElementById('tab-gov').classList.toggle('active-tab', t === 'gov');
         }
 
-        // Запуск
         loadData();
     </script>
 </body>
