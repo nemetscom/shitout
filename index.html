@@ -163,16 +163,30 @@
             }
         }
 
-        async function deployVote(addr, sym) {
-            if (!user) return alert("Connect Wallet!");
-            const startWeight = Math.min(userPower, 100000);
-            const { error } = await _supabase.from('governance_tokens').insert([{ 
-                token_address: addr, symbol: sym, creator_address: user, 
-                initial_weight: startWeight, total_votes: startWeight 
-            }]);
-            if (error) alert("Token already exists!");
-            else location.reload();
+        async function updatePower() {
+    try {
+        const currentBlock = await provider.getBlockNumber();
+        
+        // Для теста: проверяем текущий блок. 
+        // В продакшне здесь будет currentBlock - 50400
+        const snapshotBlock = currentBlock; 
+        
+        const power = await contract.getPastVotes(user, snapshotBlock);
+        userPower = Number(ethers.formatEther(power));
+        
+        if (userPower > 0) {
+            document.getElementById('user-power').innerText = Math.floor(userPower).toLocaleString();
+        } else {
+            // Если в этом блоке еще 0, пробуем просто текущие голоса
+            const currentVotes = await contract.getVotes(user);
+            userPower = Number(ethers.formatEther(currentVotes));
+            document.getElementById('user-power').innerText = Math.floor(userPower).toLocaleString();
         }
+    } catch (e) {
+        console.error("History Error:", e);
+        document.getElementById('user-power').innerHTML = '<button onclick="activate()" class="text-white underline">Activate Votes</button>';
+    }
+}
 
         function setTab(t) {
             document.getElementById('sec-clean').classList.toggle('hidden', t !== 'clean');
