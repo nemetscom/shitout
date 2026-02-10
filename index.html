@@ -3,312 +3,229 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Crypto Governance Dashboard</title>
+    <title>SHITOUT | Dust Cleaner & Governance</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        :root {
-            --bg: #0b0f1a;
-            --card-bg: #161b2c;
-            --accent: #3b82f6;
-            --success: #10b981;
-            --danger: #ef4444;
-            --text-main: #ffffff;
-            --text-dim: #94a3b8;
-        }
-
-        body {
-            font-family: 'Inter', -apple-system, sans-serif;
-            background-color: var(--bg);
-            color: var(--text-main);
-            margin: 0;
-            padding: 20px;
-        }
-
-        .container {
-            max-width: 1100px;
-            margin: 0 auto;
-        }
-
-        header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 40px;
-            border-bottom: 1px solid #2d3748;
-            padding-bottom: 20px;
-        }
-
-        /* Форма добавления */
-        .add-section {
-            background: var(--card-bg);
-            padding: 20px;
-            border-radius: 12px;
-            display: flex;
-            gap: 12px;
-            margin-bottom: 30px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-        }
-
-        input {
-            flex: 1;
-            background: #0f172a;
-            border: 1px solid #334155;
-            padding: 12px 16px;
-            border-radius: 8px;
-            color: white;
-            font-size: 14px;
-        }
-
-        input:focus { outline: 2px solid var(--accent); border-color: transparent; }
-
-        button {
-            background: var(--accent);
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 8px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: 0.2s;
-        }
-
-        button:hover { opacity: 0.9; transform: translateY(-1px); }
-        button:disabled { background: #475569; cursor: not-allowed; }
-
-        /* Сетка токенов */
-        #token-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-            gap: 20px;
-        }
-
-        .card {
-            background: var(--card-bg);
-            border-radius: 16px;
-            padding: 24px;
-            border: 1px solid #2d3748;
-            position: relative;
-            transition: 0.3s;
-        }
-
-        .card:hover { border-color: var(--accent); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3); }
-
-        .token-header { display: flex; justify-content: space-between; align-items: flex-start; }
-        .symbol { font-size: 20px; font-weight: 800; color: var(--accent); }
-        .name { color: var(--text-dim); font-size: 14px; }
-
-        .price-row { margin: 20px 0; }
-        .price { font-size: 28px; font-weight: 700; margin: 0; }
-        .change { font-size: 14px; font-weight: 600; }
-        .up { color: var(--success); }
-        .down { color: var(--danger); }
-
-        .stats {
-            display: flex;
-            justify-content: space-between;
-            font-size: 12px;
-            color: var(--text-dim);
-            background: #1e293b;
-            padding: 10px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-        }
-
-        .vote-btn {
-            width: 100%;
-            background: transparent;
-            border: 1px solid var(--accent);
-            color: var(--accent);
-        }
-
-        .vote-btn:hover { background: var(--accent); color: white; }
-
-        .dex-link {
-            display: block;
-            text-align: center;
-            margin-top: 15px;
-            font-size: 12px;
-            color: var(--text-dim);
-            text-decoration: none;
-        }
-        .dex-link:hover { color: var(--accent); }
-
-        #loader { text-align: center; padding: 40px; color: var(--text-dim); }
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;800&display=swap');
+        body { background: #05070a; color: #e2e8f0; font-family: 'JetBrains Mono', monospace; }
+        .glass { background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(12px); border: 1px solid rgba(51, 65, 85, 0.3); }
+        .btn-active { border-bottom: 2px solid #3b82f6 !important; color: #3b82f6 !important; }
+        .progress-bar { transition: width 0.5s ease-in-out; }
+        .hidden { display: none !important; }
     </style>
 </head>
-<body>
+<body class="pb-24">
 
-<div class="container">
-    <header>
-        <h1>Governance List</h1>
-        <div id="status-dot" style="color: var(--success)">● System Live</div>
+    <header class="p-5 flex justify-between items-center glass sticky top-0 z-50">
+        <div class="flex flex-col">
+            <span class="text-2xl font-black text-blue-500 italic tracking-tighter">SHITOUT</span>
+            <span class="text-[8px] uppercase tracking-[0.2em] text-slate-500 font-bold">Base Dust Cleaner</span>
+        </div>
+        <button onclick="connect()" id="connBtn" class="bg-blue-600 hover:bg-blue-500 px-5 py-2 rounded-2xl font-bold text-[10px] uppercase">Connect Wallet</button>
     </header>
 
-    <div class="add-section">
-        <input type="text" id="token-address-input" placeholder="Введите адрес токена (0x...) для голосования">
-        <button id="add-btn" onclick="handleAddToken()">Добавить</button>
+    <div class="max-w-xl mx-auto px-4 mt-6">
+        <div class="glass p-4 rounded-3xl border-blue-500/20">
+            <div class="flex justify-between text-[10px] font-bold uppercase mb-2">
+                <span>Energy Reserve (7d)</span>
+                <span id="energy-text">0 / 0 SHITOUT</span>
+            </div>
+            <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                <div id="energy-bar" class="bg-blue-500 h-full progress-bar" style="width: 0%"></div>
+            </div>
+        </div>
     </div>
 
-    <div id="loader" style="display: none;">Загрузка данных из блокчейна...</div>
-    <div id="token-grid"></div>
-</div>
+    <nav class="flex max-w-xl mx-auto mt-6 border-b border-slate-800">
+        <button onclick="setTab('clean')" id="tab-clean" class="flex-1 py-4 text-[10px] font-bold uppercase btn-active">Cleaner</button>
+        <button onclick="setTab('gov')" id="tab-gov" class="flex-1 py-4 text-[10px] font-bold uppercase text-slate-500">Governance</button>
+        <button onclick="setTab('token')" id="tab-token" class="flex-1 py-4 text-[10px] font-bold uppercase text-slate-500">$SHITOUT</button>
+    </nav>
 
-<script>
-    // Инициализация Supabase с твоими данными
-    const SB_URL = 'https://mfqteusxmwaagebykcdw.supabase.co';
-    const SB_KEY = 'sb_publishable_qc_XyoRsZsH0VIaLEwrECw_kgU0Sxj-';
-    const _supabase = supabase.createClient(SB_URL, SB_KEY);
+    <main class="p-4 max-w-xl mx-auto">
+        
+        <div id="sec-clean" class="tab-content space-y-4">
+            <h2 class="text-xs font-bold uppercase text-slate-500">Your Wallet Dust</h2>
+            <div id="wallet-tokens" class="grid gap-3">
+                <p class="text-center text-slate-600 py-10 text-xs italic">Connect wallet to scan for dust tokens...</p>
+            </div>
+        </div>
 
-    // Функция загрузки данных
-    async function loadDashboard() {
-        const grid = document.getElementById('token-grid');
-        const loader = document.getElementById('loader');
-        loader.style.display = 'block';
+        <div id="sec-gov" class="tab-content hidden space-y-6">
+            <div class="glass p-5 rounded-3xl">
+                <p class="text-[10px] font-bold text-slate-400 mb-3 uppercase text-center">Add Token (Status: Approved)</p>
+                <input type="text" id="addressInput" oninput="handleSearch(this.value)" placeholder="Base Contract Address (0x...)" class="w-full bg-slate-900 border border-slate-700 p-3 rounded-xl text-xs outline-none focus:border-blue-500">
+                <div id="previewArea" class="mt-3"></div>
+            </div>
+            
+            <h2 class="text-xs font-bold uppercase text-slate-500 mt-6">Approved Projects</h2>
+            <div id="voting-list" class="grid gap-4">
+                <p class="text-center text-slate-600 py-10 text-xs italic">Loading tokens...</p>
+            </div>
+        </div>
 
-        try {
-            // 1. Получаем токены из Supabase
-            const { data: tokens, error } = await _supabase
-                .from('governance_tokens')
-                .select('*')
-                .eq('status', 'approved')
-                .order('total_votes', { ascending: false });
+        <div id="sec-token" class="tab-content hidden text-center py-6">
+            <div class="glass p-8 rounded-[40px] w-full border-blue-500/20">
+                <h3 class="text-3xl font-black mb-1 text-white uppercase italic">SHITOUT</h3>
+                <p class="text-[10px] text-slate-500 uppercase font-bold tracking-widest mb-8 text-blue-400">Governance & Fuel</p>
+                <div class="grid grid-cols-2 gap-4">
+                    <button class="bg-blue-600 p-4 rounded-2xl font-black uppercase text-xs hover:bg-blue-500">Buy</button>
+                    <button class="bg-slate-800 p-4 rounded-2xl font-black uppercase text-xs hover:bg-slate-700">Sell</button>
+                </div>
+            </div>
+        </div>
 
-            if (error) throw error;
-            if (tokens.length === 0) {
-                grid.innerHTML = '<p style="text-align:center; width:100%">Список пока пуст. Добавьте первый токен!</p>';
-                loader.style.display = 'none';
-                return;
-            }
+    </main>
 
-            // 2. Получаем живые данные из DexScreener
-            const addresses = tokens.map(t => t.token_address).join(',');
-            const dexRes = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${addresses}`);
-            const dexData = await dexRes.json();
+    <script>
+        const SB_URL = "https://mfqteusxmwaagebykcdw.supabase.co";
+        const SB_KEY = "sb_publishable_qc_XyoRsZsH0VIaLEwrECw_kgU0Sxj-";
+        const _supabase = supabase.createClient(SB_URL, SB_KEY);
+        
+        const TOKEN_ADDR = "0xf37E99001AE478077B184bf448FE8174d928e5a4";
+        const ABI = [
+            "function getPastVotes(address, uint256) view returns (uint256)",
+            "function transfer(address, uint256) returns (bool)"
+        ];
 
-            grid.innerHTML = ''; // Очистка
+        let user = null, userPower = 0, energyAvailable = 0, provider, signer, contract;
 
-            // 3. Собираем карточки
-            tokens.forEach(token => {
-                const live = dexData.pairs?.find(p => p.baseToken.address.toLowerCase() === token.token_address.toLowerCase());
-                const priceChange = live ? parseFloat(live.priceChange.h24) : 0;
+        async function connect() {
+            if (!window.ethereum) return alert("Install MetaMask");
+            provider = new ethers.BrowserProvider(window.ethereum);
+            signer = await provider.getSigner();
+            user = (await signer.getAddress()).toLowerCase();
+            contract = new ethers.Contract(TOKEN_ADDR, ABI, signer);
+            document.getElementById('connBtn').innerText = user.slice(0,6)+'...'+user.slice(-4);
+            updatePower();
+        }
+
+        async function updatePower() {
+            if(!user) return;
+            try {
+                const currentBlock = await provider.getBlockNumber();
+                const powerRaw = await contract.getPastVotes(user, currentBlock - 1);
+                userPower = Number(ethers.formatEther(powerRaw));
+
+                const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+                const { data: logs } = await _supabase.from('votes_log').select('amount').eq('user_address', user).gt('created_at', sevenDaysAgo);
                 
-                const card = document.createElement('div');
-                card.className = 'card';
-                card.innerHTML = `
-                    <div class="token-header">
-                        <div>
-                            <div class="symbol">${token.symbol}</div>
-                            <div class="name">${token.name}</div>
-                        </div>
-                        <div class="change ${priceChange >= 0 ? 'up' : 'down'}">
-                            ${priceChange >= 0 ? '▲' : '▼'} ${Math.abs(priceChange)}%
-                        </div>
-                    </div>
-                    
-                    <div class="price-row">
-                        <p class="price">$${live ? live.priceUsd : '0.00'}</p>
-                    </div>
+                const spent = logs ? logs.reduce((acc, log) => acc + Number(log.amount), 0) : 0;
+                energyAvailable = Math.max(0, userPower - spent);
 
-                    <div class="stats">
-                        <span>Голосов: <b>${token.total_votes.toLocaleString()}</b></span>
-                        <span>DEX: <b>${live ? live.dexId.toUpperCase() : 'N/A'}</b></span>
-                    </div>
+                document.getElementById('energy-text').innerText = `${Math.floor(energyAvailable).toLocaleString()} / ${Math.floor(userPower).toLocaleString()}`;
+                const percent = userPower > 0 ? (energyAvailable / userPower) * 100 : 0;
+                document.getElementById('energy-bar').style.width = percent + '%';
+            } catch (e) { console.error(e); }
+        }
 
-                    <button class="vote-btn" onclick="handleVote('${token.id}')">Проголосовать +1000</button>
+        async function loadData() {
+            try {
+                const { data: dbTokens } = await _supabase.from('governance_tokens').select('*').eq('status', 'approved').order('total_votes', { ascending: false });
+                if (!dbTokens || dbTokens.length === 0) {
+                    document.getElementById('voting-list').innerHTML = '<p class="text-center text-slate-600 text-xs italic">No approved tokens yet.</p>';
+                    return;
+                }
+
+                // Тянем живые цены
+                const addrs = dbTokens.map(t => t.token_address).join(',');
+                const dexRes = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${addrs}`);
+                const dexData = await dexRes.json();
+
+                document.getElementById('voting-list').innerHTML = dbTokens.map(t => {
+                    const live = dexData.pairs?.find(p => p.baseToken.address.toLowerCase() === t.token_address.toLowerCase());
+                    const price = live ? live.priceUsd : '0.00';
                     
-                    ${live ? `<a href="${live.url}" target="_blank" class="dex-link">Смотреть график →</a>` : ''}
-                `;
-                grid.appendChild(card);
+                    return `
+                    <div class="glass p-5 rounded-3xl border-l-4 border-blue-500">
+                        <div class="flex justify-between items-center mb-2">
+                            <h4 class="font-black text-white text-lg uppercase italic">${t.symbol}</h4>
+                            <span class="text-[10px] font-bold text-blue-400 tracking-widest">$${price}</span>
+                        </div>
+                        <div class="text-[9px] text-slate-500 mb-4 truncate">${t.token_address}</div>
+                        <div class="flex justify-between text-[10px] font-bold uppercase mb-2">
+                            <span class="text-slate-400">Votes: ${Number(t.total_votes).toLocaleString()}</span>
+                        </div>
+                        <div class="grid grid-cols-1 gap-3">
+                            <button onclick="vote('${t.id}')" class="bg-blue-600/10 text-blue-400 border border-blue-500/30 py-3 rounded-2xl font-black uppercase text-[10px] hover:bg-blue-600 hover:text-white transition">Vote Up</button>
+                        </div>
+                    </div>`;
+                }).join('');
+            } catch (e) { console.error(e); }
+        }
+
+        async function vote(tokenId) {
+            if (!user) return alert("Connect Wallet");
+            if (energyAvailable < 1000) return alert("Not enough energy (Min: 1000)");
+
+            const { error } = await _supabase.rpc('add_vote', { 
+                p_token_id: tokenId, 
+                p_weight: 1000, 
+                p_user_addr: user 
             });
 
-        } catch (err) {
-            console.error("Load Error:", err);
-            grid.innerHTML = '<p style="color:var(--danger)">Ошибка загрузки данных. Проверьте консоль.</p>';
-        } finally {
-            loader.style.display = 'none';
-        }
-    }
-
-    // Функция добавления токена (с проверкой на дубли)
-    async function handleAddToken() {
-        const input = document.getElementById('token-address-input');
-        const btn = document.getElementById('add-btn');
-        const address = input.value.trim().toLowerCase();
-
-        if (!address || !address.startsWith('0x')) {
-            alert("Пожалуйста, введите корректный адрес токена");
-            return;
+            if (error) alert(error.message);
+            else { updatePower(); loadData(); }
         }
 
-        btn.disabled = true;
-        btn.innerText = "Проверка...";
+        async function handleSearch(val) {
+            if (val.length === 42 && val.startsWith('0x')) {
+                const addr = val.toLowerCase();
+                
+                // Проверка на дубликат ПЕРЕД показом кнопки
+                const { data: existing } = await _supabase.from('governance_tokens').select('id').eq('token_address', addr).maybeSingle();
+                
+                if (existing) {
+                    document.getElementById('previewArea').innerHTML = `<p class="text-red-400 text-[10px] text-center uppercase font-bold">❌ Already in list</p>`;
+                    return;
+                }
 
-        try {
-            // ШАГ 1: Проверка на дубликат в БД
-            const { data: existing } = await _supabase
-                .from('governance_tokens')
-                .select('id')
-                .eq('token_address', address)
-                .maybeSingle();
-
-            if (existing) {
-                alert("❌ Этот токен уже добавлен в список!");
-                return;
+                const res = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${addr}`);
+                const d = await res.json();
+                if (d.pairs && d.pairs[0]) {
+                    const p = d.pairs[0];
+                    document.getElementById('previewArea').innerHTML = `
+                        <div class="flex justify-between items-center p-4 bg-blue-600/10 border border-blue-500/30 rounded-2xl mt-2">
+                            <span class="font-bold text-xs uppercase">${p.baseToken.symbol}</span>
+                            <button onclick="submitNew('${addr}', '${p.baseToken.symbol}', '${p.baseToken.name}')" class="bg-blue-600 px-4 py-2 rounded-xl text-[10px] font-bold uppercase">List Project</button>
+                        </div>`;
+                }
+            } else {
+                document.getElementById('previewArea').innerHTML = "";
             }
-
-            // ШАГ 2: Получаем инфо из DexScreener
-            const res = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${address}`);
-            const data = await res.json();
-            const pair = data.pairs?.[0];
-
-            if (!pair) {
-                alert("❌ Токен не найден на DexScreener. Проверьте адрес.");
-                return;
-            }
-
-            // ШАГ 3: Запись в базу
-            const { error: insError } = await _supabase.from('governance_tokens').insert([{
-                token_address: address,
-                name: pair.baseToken.name,
-                symbol: pair.baseToken.symbol,
-                status: 'approved'
-            }]);
-
-            if (insError) throw insError;
-
-            alert("✅ Токен успешно добавлен!");
-            input.value = '';
-            loadDashboard();
-
-        } catch (err) {
-            alert("Ошибка: " + err.message);
-        } finally {
-            btn.disabled = false;
-            btn.innerText = "Добавить";
         }
-    }
 
-    // Функция голосования
-    async function handleVote(tokenId) {
-        // Для теста используем случайный адрес юзера, в реальности тут должен быть MetaMask
-        const tempUserAddr = "0x" + Math.random().toString(16).slice(2, 10);
+        async function submitNew(addr, sym, name) {
+            try {
+                // Если хочешь оплату транзакцией - раскомментируй:
+                // const tx = await contract.transfer(TOKEN_ADDR, ethers.parseUnits("0.001", 18));
+                // await tx.wait();
 
-        const { error } = await _supabase.rpc('add_vote', {
-            p_token_id: tokenId,
-            p_weight: 1000,
-            p_user_addr: tempUserAddr
-        });
-
-        if (error) {
-            alert("Ошибка голосования: " + error.message);
-        } else {
-            loadDashboard();
+                const { error } = await _supabase.from('governance_tokens').insert([
+                    { token_address: addr, symbol: sym, name: name, status: 'approved', total_votes: 0 }
+                ]);
+                
+                if (error) alert(error.message);
+                else { 
+                    document.getElementById('addressInput').value = "";
+                    document.getElementById('previewArea').innerHTML = "";
+                    loadData(); 
+                }
+            } catch (e) { alert("Action failed"); }
         }
-    }
 
-    // Запуск приложения
-    document.addEventListener('DOMContentLoaded', loadDashboard);
-</script>
+        function setTab(t) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.getElementById(`sec-${t}`).classList.remove('hidden');
+            document.querySelectorAll('nav button').forEach(btn => btn.classList.remove('btn-active'));
+            document.getElementById(`tab-${t}`).classList.add('btn-active');
+        }
 
+        // Запуск
+        loadData();
+        setInterval(loadData, 20000);
+    </script>
 </body>
 </html>
