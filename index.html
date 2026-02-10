@@ -31,7 +31,9 @@
         }
         .btn-primary {
             background: linear-gradient(135deg, #3b82f6, #2563eb);
+            transition: all 0.2s ease;
         }
+        .btn-primary:active { transform: scale(0.98); }
         .pulse-energy { animation: pulse 2s infinite; }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
     </style>
@@ -51,7 +53,7 @@
                 <span class="text-yellow-400 pulse-energy">⚡</span>
                 <span class="text-sm">Energy: <span id="energy-val">0</span> / <span id="max-energy-val">0</span></span>
             </div>
-            <button id="connect-btn" onclick="handleWalletAction()" class="btn-primary px-6 py-2 rounded-xl font-bold text-sm">
+            <button id="connect-btn" onclick="connectWallet()" class="btn-primary px-6 py-2 rounded-xl font-bold text-sm">
                 Connect Wallet
             </button>
         </div>
@@ -68,18 +70,14 @@
         <section id="tab-clean" class="tab-content">
             <div id="wallet-placeholder" class="text-center py-20 glass rounded-3xl border-dashed border-2 border-slate-700">
                 <p class="text-slate-400">Connect wallet to scan Base network for dust.</p>
+                <button onclick="connectWallet()" class="mt-4 text-blue-500 underline text-sm">Click to connect</button>
             </div>
             <div id="clean-dashboard" class="hidden space-y-8">
                 <div id="section-approved">
                     <h2 class="text-xl font-bold mb-4 text-blue-400">Ready to Clean</h2>
-                    <div id="approved-list" class="grid gap-4"></div>
-                    <button onclick="batchSwap()" class="mt-6 w-full py-4 rounded-2xl bg-green-600/20 border border-green-500/30 text-green-400 font-bold uppercase">
-                        Batch Swap Selected to USDC
-                    </button>
-                </div>
-                <div id="section-unknown">
-                    <h2 class="text-xl font-bold mb-4 text-slate-400">Unidentified Assets</h2>
-                    <div id="unknown-list" class="grid gap-4"></div>
+                    <div id="approved-list" class="grid gap-4 text-center p-8 glass rounded-xl text-slate-500 italic">
+                        Scanning your wallet...
+                    </div>
                 </div>
             </div>
         </section>
@@ -97,7 +95,7 @@
                     </div>
                 </div>
                 <div class="lg:col-span-2 space-y-4" id="active-proposals">
-                    <p class="text-center text-slate-500 py-10">Loading active proposals...</p>
+                    <p class="text-center text-slate-500 py-10 italic">Loading active proposals from Supabase...</p>
                 </div>
             </div>
         </section>
@@ -105,12 +103,15 @@
         <section id="tab-buy" class="tab-content hidden">
             <div class="max-w-2xl mx-auto glass-card p-8 rounded-3xl text-center">
                 <h2 class="text-2xl font-bold mb-6 text-blue-400">Get Energy</h2>
-                <div id="shitout-price" class="text-xl mb-6">Price: Fetching...</div>
+                <div id="shitout-price" class="text-xl mb-6 font-bold">Price: $---</div>
                 <a href="https://app.uniswap.org/#/swap?chain=base&outputCurrency=0xf37E99001AE478077B184bf448FE8174d928e5a4" target="_blank" 
                    class="btn-primary inline-block w-full py-4 rounded-2xl font-bold text-lg mb-4">
                     Buy $SHITOUT on Uniswap
                 </a>
-                <button onclick="copyContract()" class="text-xs text-slate-500">Copy Contract: 0xf37E...e5a4</button>
+                <div class="flex items-center justify-center gap-2">
+                    <span class="text-[10px] text-slate-500">0xf37E99001AE478077B184bf448FE8174d928e5a4</span>
+                    <button onclick="copyContract()" class="text-blue-500 text-xs">Copy</button>
+                </div>
             </div>
         </section>
     </main>
@@ -120,9 +121,9 @@
     <script>
         // --- CONFIG ---
         const SUPABASE_URL = "https://mfqteusxmwaagebykcdw.supabase.co";
-        const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1mcXRldXN4bXdhYWdlYnlrY2R3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA1ODIyNDUsImV4cCI6MjA4NjE1ODI0NX0.x5NttkdL64UNu9toj-ud02Y0J_DYBojp--4FzTo9ULI"; 
+        const SUPABASE_KEY = "YOUR_SUPABASE_KEY"; // ОБЯЗАТЕЛЬНО ВСТАВЬ КЛЮЧ
         const SHITOUT_ADDR = "0xf37E99001AE478077B184bf448FE8174d928e5a4";
-        const BASE_ID = "0x2105";
+        const BASE_ID = "0x2105"; // 8453
 
         const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
         let provider, signer, userAddr, energy = 0, balance = 0;
@@ -137,109 +138,134 @@
             if(id === 'buy') fetchShitoutPrice();
         }
 
-        // --- WALLET ---
-        async function handleWalletAction() {
-            if (userAddr) { userAddr = null; updateUI(); return; }
-            if (!window.ethereum) return showToast("Install Metamask", "error");
+        // --- CORE WALLET CONNECTION ---
+        async function connectWallet() {
+            if (!window.ethereum) {
+                showToast("Please install MetaMask!", "error");
+                return;
+            }
 
             try {
-                provider = new ethers.BrowserProvider(window.ethereum);
-                const net = await provider.getNetwork();
-                if (net.chainId !== 8453n) {
-                    await window.ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: BASE_ID }] });
-                }
-                const accounts = await provider.send("eth_requestAccounts", []);
+                // 1. Форсируем вызов окна MetaMask
+                const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
                 userAddr = accounts[0];
+
+                // 2. Инициализируем ethers
+                provider = new ethers.BrowserProvider(window.ethereum);
                 signer = await provider.getSigner();
-                showToast("Wallet Connected", "success");
-                await refreshData();
-            } catch (e) { showToast(e.message, "error"); }
+
+                // 3. Проверка сети Base
+                const network = await provider.getNetwork();
+                if (network.chainId !== 8453n) {
+                    try {
+                        await window.ethereum.request({
+                            method: 'wallet_switchEthereumChain',
+                            params: [{ chainId: BASE_ID }],
+                        });
+                    } catch (switchError) {
+                        // Если сеть не добавлена
+                        if (switchError.code === 4902) {
+                            showToast("Please add Base network to your wallet", "error");
+                        }
+                    }
+                }
+
+                showToast("Connected Successfully", "success");
+                await refreshUserData();
+                updateUI();
+
+            } catch (error) {
+                console.error(error);
+                showToast("Connection rejected", "error");
+            }
         }
 
-        async function refreshData() {
-            if (!userAddr) return;
-            const abi = ["function balanceOf(address) view returns (uint256)"];
-            const contract = new ethers.Contract(SHITOUT_ADDR, abi, provider);
-            const b = await contract.balanceOf(userAddr);
-            balance = parseFloat(ethers.formatEther(b));
+        // Слушатель смены аккаунтов
+        if (window.ethereum) {
+            window.ethereum.on('accountsChanged', (accounts) => {
+                if (accounts.length > 0) {
+                    userAddr = accounts[0];
+                    refreshUserData().then(updateUI);
+                } else {
+                    userAddr = null;
+                    updateUI();
+                }
+            });
 
-            const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-            const { data: votes } = await sb.from('votes_log').select('amount').eq('user_address', userAddr).gte('created_at', sevenDaysAgo);
-            const spent = votes ? votes.reduce((sum, v) => sum + parseFloat(v.amount), 0) : 0;
-            
-            energy = Math.max(0, balance - spent);
-            updateUI();
+            window.ethereum.on('chainChanged', () => window.location.reload());
+        }
+
+        async function refreshUserData() {
+            if (!userAddr || !provider) return;
+            try {
+                const abi = ["function balanceOf(address) view returns (uint256)"];
+                const contract = new ethers.Contract(SHITOUT_ADDR, abi, provider);
+                const b = await contract.balanceOf(userAddr);
+                balance = parseFloat(ethers.formatEther(b));
+
+                const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+                const { data: votes } = await sb.from('votes_log').select('amount').eq('user_address', userAddr).gte('created_at', sevenDaysAgo);
+                const spent = votes ? votes.reduce((sum, v) => sum + parseFloat(v.amount), 0) : 0;
+                
+                energy = Math.max(0, balance - spent);
+            } catch (e) {
+                console.error("Data refresh error:", e);
+            }
         }
 
         function updateUI() {
             const btn = document.getElementById('connect-btn');
             const enDisp = document.getElementById('energy-display');
-            btn.innerText = userAddr ? `${userAddr.slice(0,6)}...${userAddr.slice(-4)}` : "Connect Wallet";
-            enDisp.classList.toggle('hidden', !userAddr);
-            document.getElementById('energy-val').innerText = Math.floor(energy);
-            document.getElementById('max-energy-val').innerText = Math.floor(balance);
-            document.getElementById('wallet-placeholder').classList.toggle('hidden', !!userAddr);
-            document.getElementById('clean-dashboard').classList.toggle('hidden', !userAddr);
+            
+            if (userAddr) {
+                btn.innerText = `${userAddr.slice(0,6)}...${userAddr.slice(-4)}`;
+                btn.classList.replace('btn-primary', 'glass');
+                enDisp.classList.remove('hidden');
+                document.getElementById('energy-val').innerText = Math.floor(energy).toLocaleString();
+                document.getElementById('max-energy-val').innerText = Math.floor(balance).toLocaleString();
+                document.getElementById('wallet-placeholder').classList.add('hidden');
+                document.getElementById('clean-dashboard').classList.remove('hidden');
+            } else {
+                btn.innerText = "Connect Wallet";
+                btn.classList.replace('glass', 'btn-primary');
+                enDisp.classList.add('hidden');
+                document.getElementById('wallet-placeholder').classList.remove('hidden');
+                document.getElementById('clean-dashboard').classList.add('hidden');
+            }
         }
 
-        // --- GOVERNANCE LOGIC ---
-        async function proposeNewToken() {
-            const addr = document.getElementById('token-address-input').value.trim();
-            if (!ethers.isAddress(addr)) return showToast("Invalid Address", "error");
-
-            // 1. Check DB
-            const { data: existing } = await sb.from('governance_tokens').select('id').eq('token_address', addr).single();
-            if (existing) return showToast("Already in list", "error");
-
-            // 2. Fetch DexScreener
-            showToast("Fetching token data...", "info");
-            try {
-                const res = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${addr}`);
-                const data = await res.json();
-                if (!data.pairs) throw new Error("Token not found on DEX");
-                
-                const token = data.pairs[0].baseToken;
-                // 3. Insert to DB
-                const { error } = await sb.from('governance_tokens').insert([
-                    { token_address: addr, symbol: token.symbol, name: token.name, total_votes: 0, status: 'pending' }
-                ]);
-                
-                if (error) throw error;
-                showToast("Proposed! Waiting for deploy payment.", "success");
-                loadProposals();
-            } catch (e) { showToast(e.message, "error"); }
-        }
-
+        // --- GOVERNANCE ---
         async function loadProposals() {
             const container = document.getElementById('active-proposals');
-            const { data: tokens } = await sb.from('governance_tokens').select('*').eq('status', 'pending');
+            const { data: tokens, error } = await sb.from('governance_tokens').select('*').order('total_votes', { ascending: false });
             
-            if (!tokens || tokens.length === 0) {
-                container.innerHTML = `<p class="text-center text-slate-500 py-10">No active proposals</p>`;
+            if (error || !tokens || tokens.length === 0) {
+                container.innerHTML = `<p class="text-center text-slate-500 py-10">No tokens found in database</p>`;
                 return;
             }
 
             container.innerHTML = tokens.map(t => `
                 <div class="glass-card p-4 rounded-xl flex justify-between items-center">
                     <div>
-                        <div class="font-bold">${t.symbol}</div>
-                        <div class="text-xs text-slate-500">${t.name}</div>
+                        <div class="font-bold text-blue-400">${t.symbol}</div>
+                        <div class="text-[10px] text-slate-500">${t.token_address}</div>
                     </div>
                     <div class="flex items-center gap-4">
-                        <div class="text-right">
-                            <div class="text-sm font-bold text-blue-400">${t.total_votes} votes</div>
+                        <span class="font-bold text-sm">${Number(t.total_votes).toLocaleString()}</span>
+                        <div class="flex gap-1">
+                            <button onclick="vote('${t.id}', 'up')" class="px-3 py-1 bg-blue-500/20 text-blue-400 rounded-md text-xs hover:bg-blue-500/40">UP</button>
+                            <button onclick="vote('${t.id}', 'down')" class="px-3 py-1 bg-slate-700 text-slate-300 rounded-md text-xs hover:bg-slate-600">DWN</button>
                         </div>
-                        <button onclick="vote('${t.id}', 100)" class="px-4 py-2 bg-blue-500/20 text-blue-400 rounded-lg text-xs font-bold">UP</button>
                     </div>
                 </div>
             `).join('');
         }
 
-        // --- UTILS ---
+        // --- HELPERS ---
         function showToast(m, type) {
             const c = document.getElementById('toast-container');
             const t = document.createElement('div');
-            t.className = `glass p-4 rounded-xl border-l-4 ${type === 'error' ? 'border-red-500' : 'border-blue-500'} transition-all`;
+            t.className = `glass p-4 rounded-xl border-l-4 ${type === 'error' ? 'border-red-500' : 'border-blue-500'} animate-bounce-in shadow-2xl`;
             t.innerHTML = `<span class="text-sm font-bold">${m}</span>`;
             c.appendChild(t);
             setTimeout(() => t.remove(), 4000);
@@ -250,14 +276,14 @@
                 const res = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${SHITOUT_ADDR}`);
                 const data = await res.json();
                 if (data.pairs) {
-                    document.getElementById('shitout-price').innerText = `Price: $${data.pairs[0].priceUsd}`;
+                    document.getElementById('shitout-price').innerText = `Price: $${parseFloat(data.pairs[0].priceUsd).toFixed(6)}`;
                 }
             } catch (e) {}
         }
 
         function copyContract() {
             navigator.clipboard.writeText(SHITOUT_ADDR);
-            showToast("Address Copied", "success");
+            showToast("Contract Copied!", "success");
         }
 
         updateUI();
