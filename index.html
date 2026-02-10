@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SHITOUT v1.0.4 — High Precision Scanner</title>
+    <title>SHITOUT v1.0.5 — Batch Governance</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -14,14 +14,14 @@
         .glass-card { background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(59, 130, 246, 0.2); transition: all 0.2s; }
         .tab-active { border-bottom: 2px solid #3b82f6; color: #3b82f6; }
         .btn-primary { background: linear-gradient(135deg, #3b82f6, #2563eb); }
-        .progress-fill { transition: width 0.3s ease-in-out; background: linear-gradient(90deg, #3b82f6, #60a5fa); }
+        .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
         .version-tag { position: fixed; bottom: 10px; left: 10px; font-size: 10px; color: #475569; z-index: 100; }
-        input[type="checkbox"] { width: 1.2rem; height: 1.2rem; cursor: pointer; }
+        .badge-count { background: #ef4444; color: white; border-radius: 50%; padding: 2px 6px; font-size: 9px; vertical-align: top; }
     </style>
 </head>
 <body class="p-4 md:p-8">
 
-    <div class="version-tag">v1.0.4 | 5-Decimal Precision</div>
+    <div class="version-tag">v1.0.5 | Batch Propose System</div>
 
     <header class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6 mb-12">
         <div class="flex items-center gap-4">
@@ -34,7 +34,7 @@
         <div class="flex items-center gap-4">
             <div id="energy-display" class="hidden glass px-4 py-2 rounded-xl flex items-center gap-3">
                 <span class="text-yellow-400">⚡</span>
-                <span class="text-sm font-bold tracking-widest" id="energy-val">0.00000</span>
+                <span class="text-sm font-bold font-mono" id="energy-val">0.00000</span>
             </div>
             <button id="connect-btn" onclick="connectWallet()" class="btn-primary px-6 py-2 rounded-xl font-bold text-sm shadow-lg shadow-blue-500/20">
                 Connect Wallet
@@ -44,54 +44,48 @@
 
     <nav class="max-w-4xl mx-auto flex justify-around border-b border-slate-800 mb-8">
         <button onclick="switchTab('clean')" id="tab-btn-clean" class="tab-active py-4 px-6 font-bold uppercase text-xs">Clean</button>
-        <button onclick="switchTab('gov')" id="tab-btn-gov" class="py-4 px-6 font-bold uppercase text-xs">Governance</button>
+        <button onclick="switchTab('gov')" id="tab-btn-gov" class="py-4 px-6 font-bold uppercase text-xs">
+            Governance <span id="gov-badge" class="badge-count hidden">0</span>
+        </button>
         <button onclick="switchTab('buy')" id="tab-btn-buy" class="py-4 px-6 font-bold uppercase text-xs">Buy</button>
     </nav>
 
     <main class="max-w-6xl mx-auto">
         <section id="tab-clean" class="tab-content">
             <div id="wallet-placeholder" class="text-center py-20 glass rounded-3xl border-dashed border-2 border-slate-800">
-                <p class="text-slate-500">Awaiting deep scan authorization...</p>
+                <p class="text-slate-500">Waiting for connection...</p>
             </div>
 
             <div id="clean-dashboard" class="hidden space-y-8">
-                <div class="glass p-5 rounded-2xl border-blue-500/10">
-                    <div class="flex justify-between items-center mb-2">
-                        <span id="scan-label" class="text-[10px] font-bold uppercase text-blue-400 tracking-tighter">Alchemy Deep Scan v1.0.4</span>
-                        <span id="scan-percent" class="text-xs font-mono">0%</span>
-                    </div>
-                    <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                        <div id="scan-progress" class="progress-fill h-full w-0"></div>
-                    </div>
-                    <p id="scan-details" class="text-[9px] text-slate-500 mt-2 text-center uppercase tracking-widest">Idle</p>
-                </div>
-
                 <div>
-                    <div class="flex justify-between items-center mb-4">
-                        <h2 class="text-xl font-bold text-blue-400">Ready to Clean</h2>
-                        <div id="total-value" class="text-lg font-bold text-blue-500 font-mono">~$0.00000</div>
-                    </div>
+                    <h2 class="text-xl font-bold mb-4 text-blue-400">Ready to Clean (Approved)</h2>
                     <div id="approved-list" class="grid gap-3"></div>
-                    <button id="batch-swap-btn" disabled class="mt-6 w-full py-5 rounded-2xl bg-slate-800 text-slate-500 font-bold uppercase tracking-widest transition-all">
-                        Select Tokens
-                    </button>
                 </div>
 
                 <div>
-                    <h2 class="text-lg font-bold mb-4 text-slate-600 italic">Unidentified Dust</h2>
-                    <div id="unknown-list" class="grid gap-3 opacity-80"></div>
+                    <h2 class="text-lg font-bold mb-4 text-slate-600">Unidentified Dust (Select to Propose)</h2>
+                    <div id="unknown-list" class="grid gap-3"></div>
                 </div>
             </div>
         </section>
 
         <section id="tab-gov" class="tab-content hidden">
-            <div class="max-w-xl mx-auto glass p-8 rounded-3xl border-blue-500/20">
-                <h2 class="text-2xl font-bold mb-6 text-blue-400">Propose New Token</h2>
-                <div class="space-y-4">
-                    <label class="block text-xs text-slate-500 uppercase font-bold">Token Address</label>
-                    <input id="gov-token-input" type="text" placeholder="0x..." class="w-full bg-slate-900 border border-slate-800 p-4 rounded-xl text-blue-400 outline-none focus:border-blue-500 transition-all">
-                    <p class="text-[10px] text-slate-600">Cost: 0.001 $SHITOUT + Gas</p>
-                    <button class="w-full btn-primary py-4 rounded-xl font-bold uppercase tracking-widest mt-4">Create Proposal</button>
+            <div class="max-w-2xl mx-auto space-y-6">
+                <div class="glass p-8 rounded-3xl border-blue-500/20">
+                    <h2 class="text-2xl font-bold mb-4 text-blue-400">Proposal Queue</h2>
+                    <div id="gov-queue-list" class="space-y-3 mb-6">
+                        <p class="text-slate-500 italic text-sm">Your queue is empty. Go to Clean tab to find tokens.</p>
+                    </div>
+                    
+                    <div id="gov-summary" class="hidden border-t border-slate-800 pt-6">
+                        <div class="flex justify-between mb-4 font-mono text-sm">
+                            <span>Total Cost:</span>
+                            <span class="text-blue-400" id="total-propose-cost">0.00000 $SHITOUT</span>
+                        </div>
+                        <button onclick="submitBatchProposals()" class="w-full btn-primary py-4 rounded-xl font-bold uppercase tracking-widest">
+                            Pay & Propose All
+                        </button>
+                    </div>
                 </div>
             </div>
         </section>
@@ -105,18 +99,21 @@
         const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1mcXRldXN4bXdhYWdlYnlrY2R3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA1ODIyNDUsImV4cCI6MjA4NjE1ODI0NX0.x5NttkdL64UNu9toj-ud02Y0J_DYBojp--4FzTo9ULI";
         
         const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-        let provider, userAddr, selectedTotal = 0;
-        let tokenSelection = new Map();
+        let provider, userAddr;
+        
+        // Глобальный стейт очереди предложений (хранится пока открыта страница)
+        let proposeQueue = new Map(); // addr -> {symbol, balance}
 
         function switchTab(id) {
             document.querySelectorAll('.tab-content').forEach(t => t.classList.add('hidden'));
             document.querySelectorAll('nav button').forEach(b => b.classList.remove('tab-active'));
             document.getElementById('tab-' + id).classList.remove('hidden');
             document.getElementById('tab-btn-' + id).classList.add('tab-active');
+            if(id === 'gov') renderGovQueue();
         }
 
         async function connectWallet() {
-            if (!window.ethereum) return alert("Install Metamask");
+            if (!window.ethereum) return alert("Metamask!");
             const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
             userAddr = accounts[0];
             provider = new ethers.BrowserProvider(window.ethereum);
@@ -125,15 +122,6 @@
         }
 
         async function deepScan() {
-            const statusLabel = document.getElementById('scan-details');
-            const progressBar = document.getElementById('scan-progress');
-            const percentLabel = document.getElementById('scan-percent');
-            const approvedDiv = document.getElementById('approved-list');
-            const unknownDiv = document.getElementById('unknown-list');
-
-            statusLabel.innerText = "Querying Alchemy API...";
-            progressBar.style.width = "5%";
-            
             try {
                 const response = await fetch(ALCHEMY_URL, {
                     method: 'POST',
@@ -145,18 +133,12 @@
                 const { data: dbTokens } = await sb.from('governance_tokens').select('*');
                 const dbMap = new Map(dbTokens?.map(t => [t.token_address.toLowerCase(), t]));
 
-                approvedDiv.innerHTML = "";
-                unknownDiv.innerHTML = "";
+                const approvedDiv = document.getElementById('approved-list');
+                const unknownDiv = document.getElementById('unknown-list');
+                approvedDiv.innerHTML = ""; unknownDiv.innerHTML = "";
 
-                for (let i = 0; i < balances.length; i++) {
-                    const token = balances[i];
+                for (let token of balances) {
                     const addr = token.contractAddress.toLowerCase();
-                    const p = Math.floor(((i + 1) / balances.length) * 95);
-                    
-                    progressBar.style.width = `${p}%`;
-                    percentLabel.innerText = `${p}%`;
-                    statusLabel.innerText = `Precision Scan: ${i + 1}/${balances.length}`;
-
                     const metaRes = await fetch(ALCHEMY_URL, {
                         method: 'POST',
                         body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "alchemy_getTokenMetadata", params: [addr] })
@@ -165,77 +147,79 @@
                     const balance = parseFloat(ethers.formatUnits(token.tokenBalance, meta.decimals || 18));
                     
                     const dbEntry = dbMap.get(addr);
-                    const priceRes = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${addr}`);
-                    const priceData = await priceRes.json();
-                    const usdPrice = priceData.pairs?.[0]?.priceUsd || 0;
-                    const usdValue = balance * usdPrice;
-
-                    const card = createCard(addr, meta.symbol, balance, usdValue, dbEntry);
                     
+                    // Рисуем карточки
                     if (dbEntry && dbEntry.status === 'approved') {
-                        approvedDiv.innerHTML += card;
+                        approvedDiv.innerHTML += createCleanCard(addr, meta.symbol, balance, true);
                     } else {
-                        unknownDiv.innerHTML += card;
+                        unknownDiv.innerHTML += createCleanCard(addr, meta.symbol, balance, false);
                     }
                 }
-
-                statusLabel.innerText = "Deep Scan Completed";
-                progressBar.style.width = "100%";
-                percentLabel.innerText = "100%";
-
-            } catch (e) { statusLabel.innerText = "Scan Error"; }
+            } catch (e) { console.error(e); }
         }
 
-        function createCard(addr, symbol, balance, usd, dbEntry) {
-            const isApproved = dbEntry && dbEntry.status === 'approved';
-            const fixedUsd = usd.toFixed(5);
-            const fixedBalance = balance.toFixed(5);
-
+        function createCleanCard(addr, symbol, balance, isApproved) {
+            const inQueue = proposeQueue.has(addr);
             return `
                 <div class="glass-card p-4 rounded-xl flex justify-between items-center">
                     <div class="flex items-center gap-4">
-                        ${isApproved ? `<input type="checkbox" onchange="updateTotal('${addr}', ${usd}, this.checked)" class="accent-blue-500">` : ''}
+                        ${!isApproved ? `<input type="checkbox" ${inQueue ? 'checked' : ''} onchange="toggleProposeQueue('${addr}', '${symbol}', this.checked)" class="w-5 h-5 accent-blue-500">` : '<div class="w-5"></div>'}
                         <div>
                             <div class="font-bold text-blue-400 font-mono">${symbol || 'UNK'}</div>
                             <div class="text-[9px] text-slate-500 font-mono">${addr.slice(0,18)}...</div>
                         </div>
                     </div>
                     <div class="text-right">
-                        <div class="font-bold text-white font-mono">$${fixedUsd}</div>
-                        <div class="text-[9px] text-slate-400 font-mono">${fixedBalance} TKN</div>
-                        ${!isApproved ? `<button onclick="proposeViaGov('${addr}')" class="text-[9px] text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded mt-1 bg-blue-500/5 hover:bg-blue-500/20 transition-all font-bold">PROPOSE</button>` : ''}
+                        <div class="text-white font-mono text-xs">${balance.toFixed(5)} TKN</div>
+                        ${isApproved ? '<span class="text-[9px] text-green-500 font-bold">APPROVED</span>' : ''}
                     </div>
                 </div>
             `;
         }
 
-        function updateTotal(addr, val, isChecked) {
-            if (isChecked) tokenSelection.set(addr, val);
-            else tokenSelection.delete(addr);
-
-            let total = 0;
-            tokenSelection.forEach(v => total += v);
-            
-            const btn = document.getElementById('batch-swap-btn');
-            document.getElementById('total-value').innerText = `~$${total.toFixed(5)}`;
-            
-            if (tokenSelection.size > 0) {
-                btn.disabled = false;
-                btn.innerText = `Swap ${tokenSelection.size} Assets for USDC`;
-                btn.classList.replace('bg-slate-800', 'btn-primary');
-                btn.classList.replace('text-slate-500', 'text-white');
-            } else {
-                btn.disabled = true;
-                btn.innerText = `Select Tokens`;
-                btn.classList.replace('btn-primary', 'bg-slate-800');
-                btn.classList.replace('text-white', 'text-slate-500');
-            }
+        function toggleProposeQueue(addr, symbol, isChecked) {
+            if (isChecked) proposeQueue.set(addr, { symbol });
+            else proposeQueue.delete(addr);
+            updateBadges();
         }
 
-        function proposeViaGov(addr) {
-            document.getElementById('gov-token-input').value = addr;
-            switchTab('gov');
-            showToast("Address moved to Governance", "success");
+        function updateBadges() {
+            const badge = document.getElementById('gov-badge');
+            badge.innerText = proposeQueue.size;
+            badge.classList.toggle('hidden', proposeQueue.size === 0);
+        }
+
+        function renderGovQueue() {
+            const list = document.getElementById('gov-queue-list');
+            const summary = document.getElementById('gov-summary');
+            
+            if (proposeQueue.size === 0) {
+                list.innerHTML = `<p class="text-slate-500 italic text-sm text-center py-10">Queue is empty. Select tokens in 'Clean' tab.</p>`;
+                summary.classList.add('hidden');
+                return;
+            }
+
+            summary.classList.remove('hidden');
+            document.getElementById('total-propose-cost').innerText = `${(proposeQueue.size * 0.001).toFixed(5)} $SHITOUT`;
+
+            let html = "";
+            proposeQueue.forEach((data, addr) => {
+                html += `
+                    <div class="flex justify-between items-center p-3 bg-slate-900/50 rounded-lg border border-slate-800">
+                        <div>
+                            <span class="font-bold text-blue-400">${data.symbol}</span>
+                            <div class="text-[8px] text-slate-600 font-mono">${addr}</div>
+                        </div>
+                        <button onclick="toggleProposeQueue('${addr}', '', false); renderGovQueue();" class="text-red-500 text-xs">✕</button>
+                    </div>
+                `;
+            });
+            list.innerHTML = html;
+        }
+
+        async function submitBatchProposals() {
+            showToast(`Processing ${proposeQueue.size} proposals...`, "info");
+            // ТУТ БУДЕТ ЛОГИКА ОПЛАТЫ И ЗАПИСИ В SUPABASE
         }
 
         function updateUI() {
